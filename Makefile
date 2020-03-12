@@ -17,6 +17,8 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 
+clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
+
 dist: clean ## builds source and wheel package
 	python setup.py sdist
 	python setup.py bdist_wheel

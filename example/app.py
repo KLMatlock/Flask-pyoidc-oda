@@ -12,7 +12,6 @@ app = Flask(__name__)
 app.config.update({
     'SECRET_KEY': 'dev_key',  # make sure to change this!!
     'PERMANENT_SESSION_LIFETIME': datetime.timedelta(days=7).total_seconds(),
-    'PREFERRED_URL_SCHEME': 'https',
     'DEBUG': True})
 
 ISSUER1 = 'http://192.168.1.3:8890/auth/realms/mypatient'
@@ -20,6 +19,9 @@ CLIENT1 = 'flask'
 PROVIDER_NAME1 = 'provider1'
 PROVIDER_CONFIG1 = ProviderConfiguration(issuer=ISSUER1,
                                          client_metadata=ClientMetadata(CLIENT1, '34e4a94c-a4ce-480e-a5b5-a7b2b56e3199'))
+
+app.config['OIDC_PROVIDERS'] = ['provider1']
+app.config['provider1_ISSUER'] = 'http://192.168.1.3:8890/auth/realms/mypatient'
 
 auth = OIDCAuthentication({PROVIDER_NAME1: PROVIDER_CONFIG1}, app=app)
 
