@@ -245,24 +245,25 @@ class OIDCAuthentication:
             ValueError: 
                 If invalid provider name is provided.
         """        
-        if provider_name is None:
-            provider_name = self.default_provider
-        elif provider_name not in self._provider_configurations:
-            raise ValueError(
-                "Provider name '{}' not in configured providers: {}.".format(provider_name,
-                self._provider_configurations.keys())
-            )
 
         def oidc_decorator(view_func):
-            if provider_name is None:
+                PROVIDER_DECORATOR = provider_name
                 @functools.wraps(view_func)
                 def wrapper(*args, **kwargs):
-                    return view_func(*args, **kwargs)
-                return wrapper
-            else:
-                @functools.wraps(view_func)
-                def wrapper(*args, **kwargs):
-                    session = UserSession(flask.session, provider_name)
+                    PROVIDER_NAME = PROVIDER_DECORATOR
+
+                    if PROVIDER_NAME is None:
+                        PROVIDER_NAME = self.default_provider
+                    elif PROVIDER_NAME not in self._provider_configurations:
+                        raise ValueError(
+                            "Provider name '{}' not in configured providers: {}.".format(provider_name,
+                            self._provider_configurations.keys())
+                        )
+
+                    if PROVIDER_NAME is None:
+                        return view_func(*args, **kwargs)
+                    
+                    session = UserSession(flask.session, PROVIDER_NAME)
                     client = self.clients[session.current_provider]
 
                     if session.should_refresh(client.session_refresh_interval_seconds):
@@ -274,9 +275,7 @@ class OIDCAuthentication:
                     else:
                         logger.debug('user not authenticated, start flow')
                         return self._authenticate(client)
-
                 return wrapper
-
         return oidc_decorator
 
     def _logout(self):
@@ -339,19 +338,8 @@ def dict_to_providers_config(provider_name : str, config_dict : dict ) -> Provid
     """    
     client_name = config_dict.get(provider_name + '_ISSUER')
     
-
-
     client_id = config_dict.get(provider_name + '_CLIENT', None)
     client_secret = config_dict.get(provider_name + '_SECRET', None)
-
-    if client_id is None and client_secret is None:
-        client_id = config_dict.get(provider_name.upper() + '_CLIENT', None)
-        client_secret = config_dict.get(provider_name.upper() + '_SECRET', None)
-
-    if client_id is None:
-        raise ValueError('No client id found for provider {}'.format(provider_name))
-
-
     client_metadata=ClientMetadata(client_id = client_id, client_secret=client_secret)
 
     return ProviderConfiguration(issuer=client_name,
