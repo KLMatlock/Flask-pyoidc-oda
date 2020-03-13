@@ -14,7 +14,7 @@ from oic.oic.message import IdToken
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qsl, urlparse, urlencode
 
-from flask_pyoidc import OIDCAuthentication
+from flask_pyoidc import OIDCAuthentication, NoAuthenticationError
 from flask_pyoidc.provider_configuration import ProviderConfiguration, ProviderMetadata, ClientMetadata, \
     ClientRegistrationInfo
 from flask_pyoidc.user_session import UserSession
@@ -71,6 +71,11 @@ class TestOIDCAuthentication(object):
     def assert_view_mock(self, callback_mock, result):
         assert callback_mock.called
         assert result == self.CALLBACK_RETURN_VALUE
+
+    def test_unauth_error(self):
+        with pytest.raises(NoAuthenticationError) as excinfo:
+            authn = OIDCAuthentication()
+            authn.init_app(self.app)
 
     def test_should_authenticate_if_no_session(self):
         authn = self.init_app()
@@ -156,9 +161,13 @@ class TestOIDCAuthentication(object):
 
         self.assert_auth_redirect(auth_redirect)
         registration_request = json.loads(responses.calls[0].request.body.decode('utf-8'))
+        with self.app.app_context():
+            full_redirect_uri = flask.url_for(registration_request['redirect_uris'][0])
+            registration_request['redirect_uris'] = full_redirect_uri
+
         expected_post_logout_redirect_uris = post_logout_redirect_uris if post_logout_redirect_uris else ['http://{}/logout'.format(self.CLIENT_DOMAIN)]
         expected_registration_request = {
-            'redirect_uris': ['http://{}/redirect_uri'.format(self.CLIENT_DOMAIN)],
+            'redirect_uris': 'http://{}/redirect_uri'.format(self.CLIENT_DOMAIN),
             'post_logout_redirect_uris': expected_post_logout_redirect_uris
         }
         assert registration_request == expected_registration_request
@@ -500,4 +509,6 @@ class TestOIDCAuthentication(object):
         self.app.config['OIDC_REDIRECT_ENDPOINT'] = '/openid_connect_login'
         authn = self.init_app()
         assert authn._redirect_uri_endpoint == 'openid_connect_login'
-        assert authn.clients['test_provider']._redirect_uri == 'http://client.example.com/openid_connect_login'
+        with self.app.app_context():
+            redirect_url = flask.url_for(authn.clients['test_provider']._redirect_uri)
+        assert redirect_url == 'http://client.example.com/openid_connect_login'

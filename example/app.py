@@ -17,16 +17,22 @@ app.config.update({
 ISSUER1 = 'http://192.168.1.3:8890/auth/realms/mypatient'
 CLIENT1 = 'flask'
 PROVIDER_NAME1 = 'provider1'
+client_metadata=ClientMetadata(CLIENT1, '34e4a94c-a4ce-480e-a5b5-a7b2b56e3199')
 PROVIDER_CONFIG1 = ProviderConfiguration(issuer=ISSUER1,
-                                         client_metadata=ClientMetadata(CLIENT1, '34e4a94c-a4ce-480e-a5b5-a7b2b56e3199'))
+    client_metadata=client_metadata)
 
-app.config['OIDC_PROVIDERS'] = ['provider1']
+# provider_dict = {PROVIDER_NAME1: PROVIDER_CONFIG1}
+# provider_dict = None
+
+app.config['OIDC_PROVIDERS'] = 'provider1'
 app.config['provider1_ISSUER'] = 'http://192.168.1.3:8890/auth/realms/mypatient'
+app.config['provider1_CLIENT'] = 'flask'
+app.config['provider1_SECRET'] = '34e4a94c-a4ce-480e-a5b5-a7b2b56e3199'
 
-auth = OIDCAuthentication({PROVIDER_NAME1: PROVIDER_CONFIG1}, app=app)
+auth = OIDCAuthentication( app=app)
 
 @app.route('/')
-@auth.oidc_auth(PROVIDER_NAME1)
+@auth.oidc_auth()
 def login1():
     user_session = UserSession(flask.session)
     return jsonify(access_token=user_session.access_token,
@@ -34,6 +40,10 @@ def login1():
                    userinfo=user_session.userinfo)
 
 
+@app.route('/hello')
+@auth.oidc_auth()
+def hello_auth():
+    return 'Hello world!'
 
 @app.route('/logout')
 @auth.oidc_logout

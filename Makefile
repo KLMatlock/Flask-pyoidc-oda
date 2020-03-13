@@ -19,6 +19,14 @@ clean-test: ## remove test and coverage artifacts
 
 clean: clean-build clean-pyc clean-test ## remove all build, test, coverage and Python artifacts
 
+test: ## run tests quickly with the default Python
+	pytest
+
+coverage: ## check code coverage quickly with the default Python
+	coverage run --source src/flask_pyoidc -m pytest
+	coverage report -m
+	coverage html
+
 dist: clean ## builds source and wheel package
 	python setup.py sdist
 	python setup.py bdist_wheel

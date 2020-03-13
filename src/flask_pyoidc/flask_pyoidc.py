@@ -26,19 +26,22 @@ from oic.oic.message import EndSessionRequest
 from urllib.parse import parse_qsl, urlparse
 from werkzeug.utils import redirect
 
+from .provider_configuration import ProviderConfiguration, ClientMetadata
 from .auth_response_handler import AuthResponseProcessError, AuthResponseHandler, AuthResponseErrorResponseError
 from .pyoidc_facade import PyoidcFacade
 from .user_session import UninitialisedSession, UserSession
 
 logger = logging.getLogger(__name__)
 
+class NoAuthenticationError(Exception):
+    pass
 
 class OIDCAuthentication:
     """
     OIDCAuthentication object for Flask extension.
     """
 
-    def __init__(self, provider_configurations, app=None):
+    def __init__(self, provider_configurations = None, app=None):
         """
         Args:
             provider_configurations (Mapping[str, ProviderConfiguration]):
@@ -46,6 +49,11 @@ class OIDCAuthentication:
             app (flask.app.Flask): optional Flask app
         """
         self._provider_configurations = provider_configurations
+        if self._provider_configurations is not None:
+            # Gets first provider configuration as default.
+            self.default_provider = next(iter(self._provider_configurations))
+        else:
+            self.default_provider = None
 
         self.clients = None
         self._logout_view = None
@@ -56,28 +64,60 @@ class OIDCAuthentication:
             self.init_app(app)
 
     def init_app(self, app):
-        self._redirect_uri_endpoint = app.config.get('OIDC_REDIRECT_ENDPOINT', 'redirect_uri').lstrip('/')
-        # Change from relative to absolute url depending on input.
-        parse_result = urlparse(self._redirect_uri_endpoint)
-        route = parse_result.path.lstrip('/')
-        self.route = route
-        logging.info('Authentication routing to: ' + route)
+        oidc_providers = app.config.get('OIDC_PROVIDERS', None)
+        self.unauthenticated = app.config.get('UNAUTHENTICATED', False)
 
-        # setup redirect_uri as a flask route
-        app.add_url_rule('/' + route,
-                         route,
-                         self._handle_authentication_response,
-                         methods=['GET', 'POST'])
+        if oidc_providers is not None:
+            if self._provider_configurations is None:
+                self._provider_configurations = {} 
 
-        # dynamically add the Flask redirect uri to the client info
-        with app.app_context():
-            redirect_uri = self._redirect_uri_endpoint
-            logging.info('Redirect URI set to :' + redirect_uri)
+            if isinstance(oidc_providers, str):
+                oidc_providers = [oidc_providers]
+            
+            for provider in oidc_providers:
+                if str(provider).lower() == 'unauthenticated':
+                    self.unauthenticated = True
+                    continue
 
-            self.clients = {
-                name: PyoidcFacade(configuration, redirect_uri)
-                for (name, configuration) in self._provider_configurations.items()
-            }
+                provider_config = dict_to_providers_config(provider, app.config)
+                self._provider_configurations[provider] = provider_config
+
+            if self._provider_configurations == {}:
+                self._provider_configurations = None
+
+        if self._provider_configurations is not None:
+            # Gets first provider configuration as default.
+            self.default_provider = next(iter(self._provider_configurations))
+        elif self.unauthenticated:
+            logger.warning('Running server in unauthenticated mode.')
+            self.default_provider = None
+        else:
+            raise NoAuthenticationError('No providers passed and UNAUTHENTICATED set to False.')
+
+        
+        if self._provider_configurations is not None:
+            self._redirect_uri_endpoint = app.config.get('OIDC_REDIRECT_ENDPOINT', 'redirect_uri').lstrip('/')
+            # Change from relative to absolute url depending on input.
+            parse_result = urlparse(self._redirect_uri_endpoint)
+            route = parse_result.path.lstrip('/')
+            self.route = route
+            logging.info('Authentication routing to: ' + route)
+
+            # setup redirect_uri as a flask route
+            app.add_url_rule('/' + route,
+                            route,
+                            self._handle_authentication_response,
+                            methods=['GET', 'POST'])
+
+            # dynamically add the Flask redirect uri to the client info
+            with app.app_context():
+                redirect_uri = self._redirect_uri_endpoint
+                logging.info('Redirect URI set to :' + redirect_uri)
+
+                self.clients = {
+                    name: PyoidcFacade(configuration, redirect_uri)
+                    for (name, configuration) in self._provider_configurations.items()
+                }
 
     def _get_post_logout_redirect_uri(self, client):
         if client.post_logout_redirect_uris:
@@ -192,30 +232,50 @@ class OIDCAuthentication:
 
         return 'Something went wrong with the authentication, please try to login again.'
 
-    def oidc_auth(self, provider_name):
-        if provider_name not in self._provider_configurations:
+    def oidc_auth(self, provider_name : str = None):
+        """Authentication decorater. 
+        
+        Wraps a given Flask endpoint with OIDC authentication for the given provider.
+        
+        Args:
+            provider_name str:
+                Name of the provider. If None, goes to default authentication.
+
+        Raises:
+            ValueError: 
+                If invalid provider name is provided.
+        """        
+        if provider_name is None:
+            provider_name = self.default_provider
+        elif provider_name not in self._provider_configurations:
             raise ValueError(
                 "Provider name '{}' not in configured providers: {}.".format(provider_name,
-                                                                             self._provider_configurations.keys())
+                self._provider_configurations.keys())
             )
 
         def oidc_decorator(view_func):
-            @functools.wraps(view_func)
-            def wrapper(*args, **kwargs):
-                session = UserSession(flask.session, provider_name)
-                client = self.clients[session.current_provider]
-
-                if session.should_refresh(client.session_refresh_interval_seconds):
-                    logger.debug('user auth will be refreshed "silently"')
-                    return self._authenticate(client, interactive=False)
-                elif session.is_authenticated():
-                    logger.debug('user is already authenticated')
+            if provider_name is None:
+                @functools.wraps(view_func)
+                def wrapper(*args, **kwargs):
                     return view_func(*args, **kwargs)
-                else:
-                    logger.debug('user not authenticated, start flow')
-                    return self._authenticate(client)
+                return wrapper
+            else:
+                @functools.wraps(view_func)
+                def wrapper(*args, **kwargs):
+                    session = UserSession(flask.session, provider_name)
+                    client = self.clients[session.current_provider]
 
-            return wrapper
+                    if session.should_refresh(client.session_refresh_interval_seconds):
+                        logger.debug('user auth will be refreshed "silently"')
+                        return self._authenticate(client, interactive=False)
+                    elif session.is_authenticated():
+                        logger.debug('user is already authenticated')
+                        return view_func(*args, **kwargs)
+                    else:
+                        logger.debug('user not authenticated, start flow')
+                        return self._authenticate(client)
+
+                return wrapper
 
         return oidc_decorator
 
@@ -265,3 +325,23 @@ class OIDCAuthentication:
     def error_view(self, view_func):
         self._error_view = view_func
         return view_func
+
+def dict_to_providers_config(provider_name : str, config_dict : dict ) -> ProviderConfiguration:
+    """Configures a provider from a simple Python Dictionary.
+    
+    Args:
+        provider_name (str): Name of the provider. Must match the items in the config_dict.
+        config_dict (dict): Dictionary to retrieve configurations from.
+    
+    Returns:
+        ProviderConfiguration: Configured provider
+        [description]
+    """    
+    client_name = config_dict.get(provider_name + '_ISSUER')
+    
+    client_id = config_dict.get(provider_name + '_CLIENT', None)
+    client_secret = config_dict.get(provider_name + '_SECRET', None)
+    client_metadata=ClientMetadata(client_id = client_id, client_secret=client_secret)
+
+    return ProviderConfiguration(issuer=client_name,
+        client_metadata=client_metadata)

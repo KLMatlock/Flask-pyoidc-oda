@@ -6,7 +6,7 @@ import responses
 from oic.oic import IdToken
 from six.moves.urllib.parse import parse_qsl, urlencode, urlparse
 
-from example.app import ISSUER1, ISSUER2, CLIENT1, CLIENT2
+from example.app import ISSUER1, CLIENT1
 from .app import app, auth
 
 
@@ -18,13 +18,6 @@ class TestExampleApp(object):
         'token_endpoint': ISSUER1 + '/token',
         'userinfo_endpoint': ISSUER1 + '/userinfo'
     }
-    PROVIDER2_METADATA = {
-        'issuer': ISSUER2,
-        'authorization_endpoint': ISSUER2 + '/auth',
-        'jwks_uri': ISSUER2 + '/jwks',
-        'token_endpoint': ISSUER2 + '/token',
-        'userinfo_endpoint': ISSUER2 + '/userinfo'
-    }
     USER_ID = 'user1'
 
     @pytest.fixture('session', autouse=True)
@@ -34,7 +27,6 @@ class TestExampleApp(object):
         with responses.RequestsMock() as r:
             # mock provider discovery
             r.add(responses.GET, ISSUER1 + '/.well-known/openid-configuration', json=self.PROVIDER1_METADATA)
-            r.add(responses.GET, ISSUER2 + '/.well-known/openid-configuration', json=self.PROVIDER2_METADATA)
             auth.init_app(app)
 
     @responses.activate
@@ -68,8 +60,7 @@ class TestExampleApp(object):
         assert result['userinfo'] == {'sub': self.USER_ID, 'name': 'Test User'}
 
     @pytest.mark.parametrize('login_endpoint, client_id, provider_metadata', [
-        ('/', CLIENT1, PROVIDER1_METADATA),
-        ('/login2', CLIENT2, PROVIDER2_METADATA),
+        ('/', CLIENT1, PROVIDER1_METADATA)
     ])
     def test_login_logout(self, login_endpoint, client_id, provider_metadata):
         client = app.test_client()

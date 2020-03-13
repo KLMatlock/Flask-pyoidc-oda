@@ -10,9 +10,6 @@ from flask import url_for
 
 logger = logging.getLogger(__name__)
 
-REQUEST_KWARGS = {'verify' : os.environ.get('SSL_CERT_FILE',None)}
-# Filter out if none.
-REQUEST_KWARGS = {k: v for k, v in REQUEST_KWARGS.items() if v is not None}
 
 class _ClientAuthentication:
     def __init__(self, client_id, client_secret):
@@ -141,8 +138,7 @@ class PyoidcFacade:
         resp = self._provider_configuration.requests_session \
             .post(self._client.token_endpoint,
                   data=request,
-                  headers=auth_header,
-                  **REQUEST_KWARGS) \
+                  headers=auth_header) \
             .json()
         logger.debug('received token response: %s', json.dumps(resp))
 
