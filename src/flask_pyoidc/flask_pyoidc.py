@@ -339,8 +339,19 @@ def dict_to_providers_config(provider_name : str, config_dict : dict ) -> Provid
     """    
     client_name = config_dict.get(provider_name + '_ISSUER')
     
+
+
     client_id = config_dict.get(provider_name + '_CLIENT', None)
     client_secret = config_dict.get(provider_name + '_SECRET', None)
+
+    if client_id is None and client_secret is None:
+        client_id = config_dict.get(provider_name.upper() + '_CLIENT', None)
+        client_secret = config_dict.get(provider_name.upper() + '_SECRET', None)
+
+    if client_id is None:
+        raise ValueError('No client id found for provider {}'.format(provider_name))
+
+
     client_metadata=ClientMetadata(client_id = client_id, client_secret=client_secret)
 
     return ProviderConfiguration(issuer=client_name,
