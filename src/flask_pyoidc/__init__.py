@@ -1,3 +1,3 @@
 from .flask_pyoidc import OIDCAuthentication, NoAuthenticationError
 
-__version__ = '0.1.2'
+__version__ = '0.2.0'
