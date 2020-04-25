@@ -191,9 +191,8 @@ class OIDCAuthentication:
         logger.debug('received authentication response: %s', authn_resp.to_json())
 
         try:
-            result = AuthResponseHandler(client).process_auth_response(authn_resp,
-                                                                       flask.session.pop('state'),
-                                                                       flask.session.pop('nonce'))
+            auth_handler = AuthResponseHandler(client)
+            result = auth_handler.process_auth_response(authn_resp, flask.session.pop('state'), flask.session.pop('nonce'))
         except AuthResponseErrorResponseError as e:
             return self._handle_error_response(e.error_response, is_processing_fragment_encoded_response)
         except AuthResponseProcessError as e:
@@ -232,7 +231,7 @@ class OIDCAuthentication:
 
         return 'Something went wrong with the authentication, please try to login again.'
 
-    def oidc_auth(self, provider_name : str = None):
+    def oidc_auth(self, provider_name : str = None, bearer = False):
         """Authentication decorater. 
         
         Wraps a given Flask endpoint with OIDC authentication for the given provider.
@@ -240,6 +239,8 @@ class OIDCAuthentication:
         Args:
             provider_name str:
                 Name of the provider. If None, goes to default authentication.
+            bearer bool:
+                Whether access using a bearer token is allowed. Default is False.
 
         Raises:
             ValueError: 
@@ -248,9 +249,11 @@ class OIDCAuthentication:
 
         def oidc_decorator(view_func):
                 PROVIDER_DECORATOR = provider_name
+                BEARER = bearer
                 @functools.wraps(view_func)
                 def wrapper(*args, **kwargs):
                     PROVIDER_NAME = PROVIDER_DECORATOR
+                    BEARER_ALLOWED = BEARER
 
                     if PROVIDER_NAME is None:
                         PROVIDER_NAME = self.default_provider
@@ -265,6 +268,20 @@ class OIDCAuthentication:
                     
                     session = UserSession(flask.session, PROVIDER_NAME)
                     client = self.clients[session.current_provider]
+
+                    if BEARER_ALLOWED and 'Authorization' in flask.request.headers.keys():
+                        auth_msg = str(flask.request.headers['Authorization'])
+
+                        if auth_msg.startswith('Bearer '):
+                            logger.debug('accessing through bearer token')
+                            token = auth_msg[7:]
+                            userinfo = client.userinfo_request(token)
+                            if 'error' in userinfo:
+                                return flask.Response('Invalid Bearer Token',  401, {'WWW-Authenticate':'Basic realm="Login Required"'})
+                            
+                            session.update(access_token=token, userinfo=userinfo.to_dict())
+                            return view_func(*args, **kwargs)
+
 
                     if session.should_refresh(client.session_refresh_interval_seconds):
                         logger.debug('user auth will be refreshed "silently"')

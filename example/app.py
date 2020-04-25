@@ -32,7 +32,7 @@ app.config['provider1_SECRET'] = '34e4a94c-a4ce-480e-a5b5-a7b2b56e3199'
 auth = OIDCAuthentication( app=app)
 
 @app.route('/')
-@auth.oidc_auth()
+@auth.oidc_auth(bearer = True)
 def login1():
     user_session = UserSession(flask.session)
     return jsonify(access_token=user_session.access_token,
