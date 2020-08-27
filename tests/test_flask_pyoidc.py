@@ -85,36 +85,62 @@ class TestOIDCAuthentication(object):
 
         self.assert_auth_redirect(auth_redirect)
         assert not view_mock.called
+    
+    def test_should_authenticate_if_session_exp(self):
+        authn = self.init_app()
+        view_mock = self.get_view_mock()
+        with self.app.test_request_context('/'):
+            id_token = {'exp': 99999999999999999}
+            UserSession(flask.session, self.PROVIDER_NAME).update(id_token = id_token)
+
+            auth_redirect = authn.oidc_auth(self.PROVIDER_NAME)(view_mock)()
+
+        self.assert_auth_redirect(auth_redirect)
+        assert not view_mock.called
 
     def test_should_not_authenticate_if_session_exists(self):
         authn = self.init_app()
         view_mock = self.get_view_mock()
         with self.app.test_request_context('/'):
-            UserSession(flask.session, self.PROVIDER_NAME).update()
+            id_token = {'exp': 99999999999999999}
+            UserSession(flask.session, self.PROVIDER_NAME).update(id_token = id_token)
             result = authn.oidc_auth(self.PROVIDER_NAME)(view_mock)()
         self.assert_view_mock(view_mock, result)
 
-    def test_reauthenticate_silent_if_session_expired(self):
-        authn = self.init_app(session_refresh_interval_seconds=1)
+    def test_should_authenticate_if_session_exp(self):
+        authn = self.init_app()
         view_mock = self.get_view_mock()
         with self.app.test_request_context('/'):
-            now = time.time()
-            with patch('time.time') as time_mock:
-                time_mock.return_value = now - 1  # authenticated in the past
-                UserSession(flask.session, self.PROVIDER_NAME).update()
+            id_token = {'exp': 9}
+            UserSession(flask.session, self.PROVIDER_NAME).update(id_token = id_token)
+
             auth_redirect = authn.oidc_auth(self.PROVIDER_NAME)(view_mock)()
 
         self.assert_auth_redirect(auth_redirect)
-        assert 'prompt=none' in auth_redirect.location  # ensure silent auth is used
         assert not view_mock.called
 
-    def test_dont_reauthenticate_silent_if_session_not_expired(self):
-        authn = self.init_app(session_refresh_interval_seconds=999)
-        view_mock = self.get_view_mock()
-        with self.app.test_request_context('/'):
-            UserSession(flask.session, self.PROVIDER_NAME).update()  # freshly authenticated
-            result = authn.oidc_auth(self.PROVIDER_NAME)(view_mock)()
-        self.assert_view_mock(view_mock, result)
+    # def test_reauthenticate_silent_if_session_expired(self):
+    # DEPRECATED: No longer supporting silent refresh.
+    #     authn = self.init_app(session_refresh_interval_seconds=1)
+    #     view_mock = self.get_view_mock()
+    #     with self.app.test_request_context('/'):
+    #         now = time.time()
+    #         with patch('time.time') as time_mock:
+    #             time_mock.return_value = now - 1  # authenticated in the past
+    #             UserSession(flask.session, self.PROVIDER_NAME).update()
+    #         auth_redirect = authn.oidc_auth(self.PROVIDER_NAME)(view_mock)()
+
+    #     self.assert_auth_redirect(auth_redirect)
+    #     assert 'prompt=none' in auth_redirect.location  # ensure silent auth is used
+    #     assert not view_mock.called
+
+    # def test_dont_reauthenticate_silent_if_session_not_expired(self):
+    #     authn = self.init_app(session_refresh_interval_seconds=999)
+    #     view_mock = self.get_view_mock()
+    #     with self.app.test_request_context('/'):
+    #         UserSession(flask.session, self.PROVIDER_NAME).update()  # freshly authenticated
+    #         result = authn.oidc_auth(self.PROVIDER_NAME)(view_mock)()
+    #     self.assert_view_mock(view_mock, result)
 
     @pytest.mark.parametrize('response_type,expected', [
         ('code', False),

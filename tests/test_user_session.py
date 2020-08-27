@@ -7,6 +7,7 @@ from flask_pyoidc.user_session import UserSession, UninitialisedSession
 
 class TestUserSession(object):
     PROVIDER_NAME = 'test_provider'
+    GOOD_ID_TOKEN = {'exp': 99999999999999999}
 
     def initialised_session(self, session_storage):
         return UserSession(session_storage, self.PROVIDER_NAME)
@@ -14,7 +15,7 @@ class TestUserSession(object):
     def test_initialising_session_with_existing_user_session_should_preserve_state(self):
         storage = {}
         session1 = UserSession(storage, self.PROVIDER_NAME)
-        session1.update()
+        session1.update(id_token = self.GOOD_ID_TOKEN)
         assert session1.is_authenticated() is True
         assert session1.current_provider == self.PROVIDER_NAME
 
@@ -29,7 +30,7 @@ class TestUserSession(object):
     def test_initialising_session_with_new_provider_name_should_reset_session(self):
         storage = {}
         session1 = UserSession(storage, 'provider1')
-        session1.update()
+        session1.update(id_token = self.GOOD_ID_TOKEN)
         assert session1.is_authenticated() is True
         session2 = UserSession(storage, 'provider2')
         assert session2.is_authenticated() is False
@@ -38,7 +39,9 @@ class TestUserSession(object):
         assert self.initialised_session({}).is_authenticated() is False
 
     def test_authenticated_session(self):
-        assert self.initialised_session({'last_authenticated': 1234}).is_authenticated() is True
+        session = self.initialised_session({'last_authenticated': 1234})
+        session.update(id_token = self.GOOD_ID_TOKEN)
+        assert session.is_authenticated() is True
 
     def test_should_not_refresh_if_not_supported(self):
         assert self.initialised_session({}).should_refresh() is False

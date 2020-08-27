@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 
 
 class UninitialisedSession(Exception):
@@ -39,13 +40,23 @@ class UserSession:
         flask_session is empty when the session hasn't been initialised or has expired.
         Thus checking for existence of any item is enough to determine if we're authenticated.
         """
+        if self._session_storage.get('last_authenticated') is None or self._session_storage.get('id_token') is None:
+            return False
+        
+        jwt = self._session_storage.get('id_token')
 
-        return self._session_storage.get('last_authenticated') is not None
+        if jwt['exp'] < int(time.time()):
+            return False
+
+        return True
 
     def should_refresh(self, refresh_interval_seconds=None):
-        return refresh_interval_seconds is not None and \
-               self._session_storage.get('last_session_refresh') is not None and \
-               self._refresh_time(refresh_interval_seconds) < time.time()
+        timer_refresh = True
+        if refresh_interval_seconds is not None:
+            timer_refresh = self._refresh_time(refresh_interval_seconds) < time.time()
+
+        return timer_refresh and self._session_storage.get('last_session_refresh') is not None
+               
 
     def _refresh_time(self, refresh_interval_seconds):
         last = self._session_storage.get('last_session_refresh', 0)

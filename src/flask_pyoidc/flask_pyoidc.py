@@ -282,12 +282,8 @@ class OIDCAuthentication:
                             session.update(access_token=token, userinfo=userinfo.to_dict())
                             return view_func(*args, **kwargs)
 
-
-                    if session.should_refresh(client.session_refresh_interval_seconds):
-                        logger.debug('user auth will be refreshed "silently"')
-                        return self._authenticate(client, interactive=False)
-                    elif session.is_authenticated():
-                        logger.debug('user is already authenticated')
+                    if session.is_authenticated():
+                        logger.debug('user is authenticated')
                         return view_func(*args, **kwargs)
                     else:
                         logger.debug('user not authenticated, start flow')
