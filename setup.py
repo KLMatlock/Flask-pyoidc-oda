@@ -14,7 +14,7 @@ setup(
     author_email='kevin.matlock@omicsautomation.com',
     description='Flask extension for OpenID Connect authentication, modified for use at ODA.',
     install_requires=[
-        'oic==1.1.2',
+        'oic==1.2.1',
         'Flask',
         'requests',
         'importlib_resources'
