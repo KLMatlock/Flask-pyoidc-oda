@@ -30,9 +30,9 @@ PROVIDER_CONFIG1 = ProviderConfiguration(issuer=ISSUER1,
 # provider_dict = None
 
 app.config['OIDC_PROVIDERS'] = 'provider1'
-app.config['provider1_ISSUER'] = 'https://oda-mypatient360-dev.westus2.cloudapp.azure.com/auth/realms/mypatient'
+app.config['provider1_ISSUER'] = 'http://localhost:8890/auth/realms/mypatient'
 app.config['provider1_CLIENT'] = 'pathds'
-app.config['provider1_SECRET'] = '3005ab74-4c7c-46f9-8725-26d94799eeb0'
+app.config['provider1_SECRET'] = ''
 
 auth = OIDCAuthentication( app=app)
 
