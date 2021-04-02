@@ -16,10 +16,11 @@
 import functools
 import json
 import logging
+from dotmap import DotMap
 
 import flask
 import importlib_resources
-from flask import current_app
+from flask import current_app, abort
 from flask.helpers import url_for
 from oic import rndstr
 from oic.oic.message import EndSessionRequest
@@ -66,6 +67,11 @@ class OIDCAuthentication:
     def init_app(self, app):
         oidc_providers = app.config.get('OIDC_PROVIDERS', None)
         self.unauthenticated = app.config.get('UNAUTHENTICATED', False)
+        self.required_roles = app.config.get('OIDC_REQUIRED_ROLES', None)
+        if self.required_roles:
+            if not(type(self.required_roles) is list):
+                self.required_roles = [ self. required_roles ]
+        self.role_claim = app.config.get('OIDC_ROLE_CLAIM', None)
 
         if oidc_providers is not None:
             if self._provider_configurations is None:
@@ -231,6 +237,40 @@ class OIDCAuthentication:
 
         return 'Something went wrong with the authentication, please try to login again.'
 
+    def check_rbac(self, required_roles = None, role_claim = None, userinfo = None):
+        if required_roles is None:
+            if self.required_roles is None:
+                logger.info("No role check performed.")
+                return True
+            required_roles = self.required_roles
+        logger.info(f"Checking for role {required_roles}")    
+        
+        if role_claim is None:
+            if self.role_claim is None:
+                role_claim = "roles"
+            else:
+                role_claim = self.role_claim
+        logger.info(f"Checking in claim {role_claim}")    
+
+        if userinfo is None:
+            if flask.g.bearer:
+                userinfo = flask.g.userinfo
+            else:
+                userinfo = UserSession(flask.session).userinfo
+        
+        logger.info(f"Checking for role in claim {role_claim}")
+        claims = role_claim.split('.')
+        try:
+            claim = userinfo[claims.pop(0)]
+            while claims != []:
+                claim = claim[claims.pop(0)]
+            logger.info(f"Roles assigned to user {claim}")
+        except KeyError:
+            logger.info("Claim not found. Not authorizing user.")
+            return False
+        return all(role in claim  for role in required_roles)
+
+
     def oidc_auth(self, provider_name : str = None, bearer = False):
         """Authentication decorater. 
         
@@ -280,10 +320,20 @@ class OIDCAuthentication:
                                 return flask.Response('Invalid Bearer Token',  401, {'WWW-Authenticate':'Basic realm="Login Required"'})
                             
                             session.update(access_token=token, userinfo=userinfo.to_dict())
+                            flask.g.bearer = True
+                            flask.g.access_token = token
+                            flask.g.userinfo = userinfo
+                            valid_rbac = self.check_rbac(userinfo = flask.g.userinfo)
+                            if not valid_rbac:
+                                abort(401)
                             return view_func(*args, **kwargs)
 
                     if session.is_authenticated():
+                        flask.g.bearer = False
                         logger.debug('user is authenticated')
+                        valid_rbac = self.check_rbac()
+                        if not valid_rbac:
+                            abort(401)
                         return view_func(*args, **kwargs)
                     else:
                         logger.debug('user not authenticated, start flow')

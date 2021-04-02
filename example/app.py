@@ -33,6 +33,8 @@ app.config['OIDC_PROVIDERS'] = 'provider1'
 app.config['provider1_ISSUER'] = 'http://localhost:8890/auth/realms/mypatient'
 app.config['provider1_CLIENT'] = 'pathds'
 app.config['provider1_SECRET'] = ''
+app.config['OIDC_REQUIRED_ROLES'] = "admin"
+app.config['OIDC_ROLE_CLAIM'] = "realm_access.roles"
 
 auth = OIDCAuthentication( app=app)
 
