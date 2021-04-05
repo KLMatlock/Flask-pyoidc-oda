@@ -16,7 +16,6 @@
 import functools
 import json
 import logging
-from dotmap import DotMap
 
 import flask
 import importlib_resources
