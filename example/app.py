@@ -4,11 +4,14 @@ import logging
 from flask import Flask, jsonify
 import requests
 
+from flask_session import Session
+
 from flask_pyoidc import OIDCAuthentication
 from flask_pyoidc.provider_configuration import ProviderConfiguration, ClientMetadata
 from flask_pyoidc.user_session import UserSession
 
 app = Flask(__name__)
+
 
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
@@ -17,7 +20,10 @@ logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
 app.config.update({
     'SECRET_KEY': 'dev_key',  # make sure to change this!!
     'PERMANENT_SESSION_LIFETIME': datetime.timedelta(days=7).total_seconds(),
-    'DEBUG': True})
+    'DEBUG': True,
+    'SESSION_TYPE': 'filesystem',
+    'SESSION_FILE_DIR': '/tmp/sessions'})
+
 
 ISSUER1 = 'http://localhost:8890/auth/realms/mypatient'
 CLIENT1 = 'flask'
@@ -29,13 +35,21 @@ PROVIDER_CONFIG1 = ProviderConfiguration(issuer=ISSUER1,
 # provider_dict = {PROVIDER_NAME1: PROVIDER_CONFIG1}
 # provider_dict = None
 
+# app.config['OIDC_PROVIDERS'] = 'provider1'
+# app.config['provider1_ISSUER'] = 'https://login.microsoftonline.com/ac0995bc-2f61-4cb7-84be-98ddba0d7a98/v2.0/'
+# app.config['provider1_CLIENT'] = '6ac8e8fd-aeab-438f-8f4a-d4a50cc1c1b0'
+# app.config['provider1_SECRET'] = 'Q3-Lv--8QEP9y62l_-.w70TPm39CZC84Iy'
+
 app.config['OIDC_PROVIDERS'] = 'provider1'
-app.config['provider1_ISSUER'] = 'http://localhost:8890/auth/realms/mypatient'
+app.config['provider1_ISSUER'] = 'https://oda-mypatient360-dev.westus2.cloudapp.azure.com/auth/realms/mypatient'
 app.config['provider1_CLIENT'] = 'pathds'
-app.config['provider1_SECRET'] = ''
+app.config['provider1_SECRET'] = '3005ab74-4c7c-46f9-8725-26d94799eeb0'
+#app.config['OIDC_REQUIRED_ROLES'] = "fake"
 app.config['OIDC_REQUIRED_ROLES'] = "admin"
 app.config['OIDC_ROLE_CLAIM'] = "realm_access.roles"
 
+#app.config['provider1_SECRET'] = 'wWW1~hL_jjK-b_B3_X60OPUuzL06201oX.'
+Session(app)
 auth = OIDCAuthentication( app=app)
 
 @app.route('/')
