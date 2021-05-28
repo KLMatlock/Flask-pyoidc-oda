@@ -374,7 +374,10 @@ class TestOIDCAuthentication(object):
         cookies = SimpleCookie()
         cookies.load(resp.headers['Set-Cookie'])
         session_cookie_expiration = cookies[self.app.config['SESSION_COOKIE_NAME']]['expires']
-        parsed_expiration = datetime.strptime(session_cookie_expiration, '%a, %d-%b-%Y %H:%M:%S GMT')
+        try:
+            parsed_expiration = datetime.strptime(session_cookie_expiration, '%a, %d-%b-%Y %H:%M:%S GMT')
+        except ValueError:
+            parsed_expiration = datetime.strptime(session_cookie_expiration, '%a, %d %b %Y %H:%M:%S GMT')
         cookie_lifetime = (parsed_expiration - datetime.utcnow()).total_seconds()
         assert cookie_lifetime == pytest.approx(session_lifetime, abs=1)
 
@@ -538,3 +541,38 @@ class TestOIDCAuthentication(object):
         with self.app.app_context():
             redirect_url = flask.url_for(authn.clients['test_provider']._redirect_uri)
         assert redirect_url == 'http://client.example.com/openid_connect_login'
+
+    # @responses.activate
+    # def test_token_error_response_returns_default_error_if_no_error_view_set(self):
+    #     # mock userinfo response
+    #     userinfo = {'sub': 'sub', 'name': 'Test User'}
+    #     userinfo_endpoint = self.PROVIDER_BASEURL + '/userinfo'
+    #     responses.add(responses.GET, userinfo_endpoint, json=userinfo)
+
+    #     authn = self.init_app(provider_metadata_extras={'userinfo_endpoint': userinfo_endpoint})
+    #     state = 'test_state'
+
+    #     with self.app.test_request_context('bearer_test'):
+    #         authn.
+    #         flask.session['destination'] = '/'
+    #         flask.session['state'] = state
+    #         flask.session['nonce'] = nonce
+    #         authn._handle_authentication_response()
+    #         session = UserSession(flask.session)
+    #         assert session.access_token == access_token
+    #         assert session.id_token == id_token_claims
+    #         assert session.id_token_jwt == id_token_jwt
+    #         assert session.userinfo == userinfo
+
+    #     token_endpoint = self.PROVIDER_BASEURL + '/token'
+    #     state = 'test_tate'
+    #     error_response = {'error': 'invalid_request', 'error_description': 'test error', 'state': state}
+    #     responses.add(responses.POST, token_endpoint, json=error_response)
+
+    #     authn = self.init_app(provider_metadata_extras={'token_endpoint': token_endpoint})
+    #     with self.app.test_request_context('/redirect_uri?code=foo&state=' + state):
+    #         UserSession(flask.session, self.PROVIDER_NAME)
+    #         flask.session['state'] = state
+    #         flask.session['nonce'] = 'test_nonce'
+    #         response = authn._handle_authentication_response()
+    #     assert response == "Something went wrong with the authentication, please try to login again."

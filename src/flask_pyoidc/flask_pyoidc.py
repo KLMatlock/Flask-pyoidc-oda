@@ -37,6 +37,13 @@ from .rbac_checker import RBACChecker
 
 logger = logging.getLogger(__name__)
 
+def authenticate_token(client : PyoidcFacade, token : str):
+    userinfo = client.userinfo_request(token)
+    authd = True
+    if "error" in userinfo:
+        authd = False
+    return (authd, userinfo)
+
 
 class NoAuthenticationError(Exception):
     pass
@@ -259,7 +266,7 @@ class OIDCAuthentication:
 
         return "Something went wrong with the authentication, please try to login again."
 
-    def oidc_auth(self, provider_name: str = None, bearer=False):
+    def oidc_auth(self, provider_name: str = None, bearer=False, bearer_only = False):
         """Authentication decorater. 
         
         Wraps a given Flask endpoint with OIDC authentication for the given provider.
@@ -278,11 +285,13 @@ class OIDCAuthentication:
         def oidc_decorator(view_func):
             PROVIDER_DECORATOR = provider_name
             BEARER = bearer
+            BEARER_REQ = bearer_only
 
             @functools.wraps(view_func)
             def wrapper(*args, **kwargs):
                 PROVIDER_NAME = PROVIDER_DECORATOR
                 BEARER_ALLOWED = BEARER
+                BEARER_REQUIRED = BEARER_REQ
 
                 if PROVIDER_NAME is None:
                     PROVIDER_NAME = self.default_provider
@@ -298,34 +307,43 @@ class OIDCAuthentication:
 
                 session = UserSession(flask.session, PROVIDER_NAME)
                 client = self.clients[session.current_provider]
+                bearer_auth = BEARER_ALLOWED or BEARER_REQUIRED
 
-                if BEARER_ALLOWED and "Authorization" in flask.request.headers.keys():
+                token = None
+                valid_header = "Authorization" in flask.request.headers.keys()
+                if valid_header:
                     auth_msg = str(flask.request.headers["Authorization"])
 
                     if auth_msg.startswith("Bearer "):
-                        logger.debug("accessing through bearer token")
                         token = auth_msg[7:]
-                        userinfo = client.userinfo_request(token)
-                        if "error" in userinfo:
-                            return flask.Response(
-                                "Invalid Bearer Token",
-                                401,
-                                {"WWW-Authenticate": 'Basic realm="Login Required"'},
-                            )
 
-                        session.update(access_token=token, userinfo=userinfo.to_dict())
-                        flask.g.bearer = True
-                        flask.g.access_token = token
-                        flask.g.userinfo = userinfo
-                        # Acess token is verified by calling the "userinfo" endpoint so no need to verify JWT.
-                        access_token_claimset = {}
-                        if session.access_token:
-                            access_token_claimset = jwt.decode(token, options={"verify_signature": False})
+                if bearer_auth and (token is not None):
+                    logger.debug("accessing through bearer token")
+                    (auth, userinfo) = authenticate_token(client, token)
+                    if auth == False:
+                        return flask.Response(
+                            "Invalid Bearer Token",
+                            401,
+                            {"WWW-Authenticate": 'Basic realm="Login Required"'},
+                        )
 
-                        valid_rbac = self.rbac_checker.check_rbac(access_token_claimset, id_token = {}, userinfo_token = userinfo)
-                        if not valid_rbac:
-                            abort(401)
-                        return view_func(*args, **kwargs)
+                    session.update(access_token=token, userinfo=userinfo.to_dict())
+                    flask.g.bearer = True
+                    flask.g.access_token = token
+                    flask.g.userinfo = userinfo
+                    # Acess token is verified by calling the "userinfo" endpoint so no need to verify JWT.
+                    access_token_claimset = {}
+                    if session.access_token:
+                        access_token_claimset = jwt.decode(token, options={"verify_signature": False})
+
+                    valid_rbac = self.rbac_checker.check_rbac(access_token_claimset, id_token = {}, userinfo_token = userinfo)
+                    if not valid_rbac:
+                        abort(401)
+                    return view_func(*args, **kwargs)
+
+                if BEARER_REQUIRED:
+                    abort(401)
+
 
                 if session.is_authenticated():
                     flask.g.bearer = False

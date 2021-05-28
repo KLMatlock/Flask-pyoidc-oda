@@ -16,6 +16,7 @@ docs/_templates
 # Local files.
 *.local.*
 *.local
+debugapp.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
