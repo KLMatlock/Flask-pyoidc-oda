@@ -40,7 +40,7 @@ class AuthResponseHandler:
         """
         self._client = client
 
-    def process_auth_response(self, auth_response, expected_state, expected_nonce=None):
+    def process_auth_response(self, auth_response, expected_state, expected_nonce=None, skew = None):
         """
         Args:
             auth_response (Union[AuthorizationResponse, AuthorizationErrorResponse]): parsed OIDC auth response
@@ -61,7 +61,7 @@ class AuthResponseHandler:
         id_token_jwt = auth_response.get('id_token_jwt', None) if 'id_token_jwt' in auth_response else None
 
         if 'code' in auth_response:
-            token_resp = self._client.token_request(auth_response['code'])
+            token_resp = self._client.token_request(auth_response['code'], skew = skew)
             if token_resp:
                 if 'error' in token_resp:
                     raise AuthResponseErrorResponseError(token_resp.to_dict())

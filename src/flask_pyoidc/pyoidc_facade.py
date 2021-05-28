@@ -96,19 +96,19 @@ class PyoidcFacade:
 
         return auth_request.request(self._client.authorization_endpoint)
 
-    def parse_authentication_response(self, response_params):
+    def parse_authentication_response(self, response_params, skew = None):
         """
         Args:
             response_params (Mapping[str, str]): authentication response parameters
         Returns:
             Union[AuthorizationResponse, AuthorizationErrorResponse]: The parsed authorization response
         """
-        auth_resp = self._parse_response(response_params, AuthorizationResponse, AuthorizationErrorResponse)
+        auth_resp = self._parse_response(response_params, AuthorizationResponse, AuthorizationErrorResponse, skew = skew)
         if 'id_token' in response_params:
             auth_resp['id_token_jwt'] = response_params['id_token']
         return auth_resp
 
-    def token_request(self, authorization_code):
+    def token_request(self, authorization_code, skew = None):
         """
         Makes a token request.  If the 'token_endpoint' is not configured in the provider metadata, no request will
         be made.
@@ -142,7 +142,7 @@ class PyoidcFacade:
             .json()
         logger.debug('received token response: %s', json.dumps(resp))
 
-        token_resp = self._parse_response(resp, AccessTokenResponse, TokenErrorResponse)
+        token_resp = self._parse_response(resp, AccessTokenResponse, TokenErrorResponse, skew = skew)
         if 'id_token' in resp:
             token_resp['id_token_jwt'] = resp['id_token']
 
@@ -179,10 +179,13 @@ class PyoidcFacade:
     def post_logout_redirect_uris(self):
         return self._client.registration_response.get('post_logout_redirect_uris')
 
-    def _parse_response(self, response_params, success_response_cls, error_response_cls):
+    def _parse_response(self, response_params, success_response_cls, error_response_cls, skew = None):
         if 'error' in response_params:
             response = error_response_cls(**response_params)
         else:
             response = success_response_cls(**response_params)
-            response.verify(keyjar=self._client.keyjar)
+            if skew is None:
+                response.verify(keyjar=self._client.keyjar)
+            else:
+                response.verify(keyjar=self._client.keyjar, skew = skew)
         return response

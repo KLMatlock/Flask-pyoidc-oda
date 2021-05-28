@@ -72,6 +72,7 @@ class OIDCAuthentication:
         self._logout_view = None
         self._error_view = None
         self._redirect_uri_endpoint = None
+        self.skew = None
 
         if app:
             self.init_app(app)
@@ -79,6 +80,7 @@ class OIDCAuthentication:
     def init_app(self, app):
         oidc_providers = app.config.get("OIDC_PROVIDERS", None)
         self.unauthenticated = app.config.get("UNAUTHENTICATED", False)
+        self.skew = app.config.get("OIDC_SKEW", None)
         required_roles = app.config.get("OIDC_REQUIRED_ROLES", [])
         if required_roles:
             if not (type(required_roles) is list):
@@ -212,13 +214,13 @@ class OIDCAuthentication:
 
         client = self.clients[UserSession(flask.session).current_provider]
 
-        authn_resp = client.parse_authentication_response(auth_resp)
+        authn_resp = client.parse_authentication_response(auth_resp, skew = self.skew)
         logger.debug("received authentication response: %s", authn_resp.to_json())
 
         try:
             auth_handler = AuthResponseHandler(client)
             result = auth_handler.process_auth_response(
-                authn_resp, flask.session.pop("state"), flask.session.pop("nonce")
+                authn_resp, flask.session.pop("state"), flask.session.pop("nonce"), skew = self.skew
             )
         except AuthResponseErrorResponseError as e:
             return self._handle_error_response(
