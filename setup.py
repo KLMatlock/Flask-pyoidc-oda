@@ -8,7 +8,7 @@ setup(
     version='0.5.0',
     packages=['flask_pyoidc'],
     package_dir={'': 'src'},
-    url='https://github.com/zamzterz/flask-pyoidc',
+    url='https://github.com/KLMatlock/Flask-pyoidc-oda',
     license='Apache 2.0',
     author='Kevin Matlock',
     author_email='kevin.matlock@omicsautomation.com',
