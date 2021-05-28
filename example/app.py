@@ -43,7 +43,7 @@ PROVIDER_CONFIG1 = ProviderConfiguration(issuer=ISSUER1,
 app.config['OIDC_PROVIDERS'] = 'provider1'
 app.config['provider1_ISSUER'] = 'https://oda-mypatient360-dev.westus2.cloudapp.azure.com/auth/realms/mypatient'
 app.config['provider1_CLIENT'] = 'pathds'
-app.config['provider1_SECRET'] = '3005ab74-4c7c-46f9-8725-26d94799eeb0'
+app.config['provider1_SECRET'] = ''
 #app.config['OIDC_REQUIRED_ROLES'] = "fake"
 app.config['OIDC_REQUIRED_ROLES'] = "admin"
 app.config['OIDC_ROLE_CLAIM'] = "realm_access.roles"

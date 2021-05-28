@@ -13,6 +13,10 @@ docs/_static
 docs/_templates
 .vscode/*
 
+# Local files.
+*.local.*
+*.local
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
