@@ -5,7 +5,7 @@ with open('README.md') as f:
 
 setup(
     name='Flask-pyoidc-oda',
-    version='0.6.1',
+    version='0.6.2',
     packages=['flask_pyoidc'],
     package_dir={'': 'src'},
     url='https://github.com/KLMatlock/Flask-pyoidc-oda',
