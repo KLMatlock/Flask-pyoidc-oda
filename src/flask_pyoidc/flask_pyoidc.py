@@ -100,10 +100,6 @@ class OIDCAuthentication:
             else:
                 self.session_key = cfg_key
 
-        self.destination_key = self.session_key + "_destination"
-        self.state_key = self.session_key + "_state"
-        self.nonce_key = self.session_key + "_nonce"
-
         if oidc_providers is not None:
             if self._provider_configurations is None:
                 self._provider_configurations = {}
@@ -186,10 +182,10 @@ class OIDCAuthentication:
         if not client.is_registered():
             self._register_client(client)
 
+        state_key = rndstr()
 
-        flask.session[self.destination_key] = flask.request.url
-        flask.session[self.state_key] = rndstr()
-        flask.session[self.nonce_key] = rndstr()
+        flask.session[state_key + "_destination"] = flask.request.url
+        flask.session[state_key + "_nonce"] = rndstr()
 
         # Use silent authentication for session refresh
         # This will not show login prompt to the user
@@ -200,7 +196,7 @@ class OIDCAuthentication:
         redirect_uri = url_for(self.route, _external=True)
 
         login_url = client.authentication_request(
-            flask.session[self.state_key], flask.session[self.nonce_key], redirect_uri, extra_auth_params,
+            state_key, flask.session[state_key + "_nonce"] , redirect_uri, extra_auth_params,
         )
 
         auth_params = dict(parse_qsl(login_url.split("?")[1]))
@@ -211,6 +207,8 @@ class OIDCAuthentication:
 
     def _handle_authentication_response(self):
         has_error = flask.request.args.get("error", False, lambda x: bool(int(x)))
+        state_key = flask.request.args.get("state", None, type=str)
+
         if has_error:
             if "error" in flask.session:
                 return self._show_error_response(flask.session.pop("error"))
@@ -227,6 +225,9 @@ class OIDCAuthentication:
             auth_resp = flask.request.form
         else:
             auth_resp = flask.request.args
+        state_key = auth_resp.get("state", None)
+        if state_key is None:
+            abort(403)
 
         client = self.clients[UserSession(flask.session).current_provider]
 
@@ -236,7 +237,7 @@ class OIDCAuthentication:
         try:
             auth_handler = AuthResponseHandler(client)
             result = auth_handler.process_auth_response(
-                authn_resp, flask.session.pop(self.state_key), flask.session.pop(self.nonce_key), skew = self.skew
+                authn_resp, state_key, flask.session.pop(state_key + "_nonce"), skew = self.skew
             )
         except AuthResponseErrorResponseError as e:
             return self._handle_error_response(
@@ -258,7 +259,7 @@ class OIDCAuthentication:
             result.userinfo_claims,
         )
 
-        destination = flask.session.pop(self.destination_key)
+        destination = flask.session.pop(state_key+ "_destination")
         if is_processing_fragment_encoded_response:
             # if the POST request was from the JS page handling fragment encoded responses we need to return
             # the destination URL as the response body

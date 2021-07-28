@@ -160,9 +160,8 @@ class TestOIDCAuthentication(object):
         state = "test_state"
         with self.app.test_request_context("/redirect_uri?state={}&code=test".format(state)):
             UserSession(flask.session, self.PROVIDER_NAME)
-            flask.session[self.SESSION_KEY + "_destination"] = "/"
-            flask.session[self.SESSION_KEY + "_state"] = state
-            flask.session[self.SESSION_KEY + "_nonce"] = nonce
+            flask.session[state + "_destination"] = "/"
+            flask.session[state + "_nonce"] = nonce
             authn._handle_authentication_response()
 
             assert test_endpoint()
@@ -244,9 +243,8 @@ class TestOIDCAuthentication(object):
         state = "test_state"
         with self.app.test_request_context("/redirect_uri?state={}&code=test".format(state)):
             UserSession(flask.session, self.PROVIDER_NAME)
-            flask.session[self.SESSION_KEY + "_destination"] = "/"
-            flask.session[self.SESSION_KEY + "_state"] = state
-            flask.session[self.SESSION_KEY + "_nonce"] = nonce
+            flask.session[state + "_destination"] = "/"
+            flask.session[state + "_nonce"] = nonce
             authn._handle_authentication_response()
 
             with pytest.raises(Unauthorized):
