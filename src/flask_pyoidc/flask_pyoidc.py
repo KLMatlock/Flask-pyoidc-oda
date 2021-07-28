@@ -19,6 +19,7 @@ import logging
 from urllib.parse import parse_qsl, urlparse
 
 import flask
+from flask.globals import session
 import importlib_resources
 from flask import abort, current_app
 from flask.helpers import url_for
@@ -54,7 +55,7 @@ class OIDCAuthentication:
     OIDCAuthentication object for Flask extension.
     """
 
-    def __init__(self, provider_configurations=None, app=None):
+    def __init__(self, provider_configurations=None, app=None, session_key = None):
         """
         Args:
             provider_configurations (Mapping[str, ProviderConfiguration]):
@@ -73,6 +74,8 @@ class OIDCAuthentication:
         self._error_view = None
         self._redirect_uri_endpoint = None
         self.skew = None
+        self.session_key = session_key
+
 
         if app:
             self.init_app(app)
@@ -88,6 +91,18 @@ class OIDCAuthentication:
         role_claim = app.config.get("OIDC_ROLE_CLAIM", None)
         source = app.config.get("OIDC_ROLE_SOURCE", "auth")
         self.rbac_checker = RBACChecker(required_roles, role_claim, source)
+
+        
+        if self.session_key is None:
+            cfg_key = app.config.get("OIDC_SESSION_KEY", None)
+            if cfg_key is None:
+                self.session_key = rndstr(8)
+            else:
+                self.session_key = cfg_key
+
+        self.destination_key = self.session_key + "_destination"
+        self.state_key = self.session_key + "_state"
+        self.nonce_key = self.session_key + "_nonce"
 
         if oidc_providers is not None:
             if self._provider_configurations is None:
@@ -171,9 +186,10 @@ class OIDCAuthentication:
         if not client.is_registered():
             self._register_client(client)
 
-        flask.session["destination"] = flask.request.url
-        flask.session["state"] = rndstr()
-        flask.session["nonce"] = rndstr()
+
+        flask.session[self.destination_key] = flask.request.url
+        flask.session[self.state_key] = rndstr()
+        flask.session[self.nonce_key] = rndstr()
 
         # Use silent authentication for session refresh
         # This will not show login prompt to the user
@@ -184,7 +200,7 @@ class OIDCAuthentication:
         redirect_uri = url_for(self.route, _external=True)
 
         login_url = client.authentication_request(
-            flask.session["state"], flask.session["nonce"], redirect_uri, extra_auth_params,
+            flask.session[self.state_key], flask.session[self.nonce_key], redirect_uri, extra_auth_params,
         )
 
         auth_params = dict(parse_qsl(login_url.split("?")[1]))
@@ -220,7 +236,7 @@ class OIDCAuthentication:
         try:
             auth_handler = AuthResponseHandler(client)
             result = auth_handler.process_auth_response(
-                authn_resp, flask.session.pop("state"), flask.session.pop("nonce"), skew = self.skew
+                authn_resp, flask.session.pop(self.state_key), flask.session.pop(self.nonce_key), skew = self.skew
             )
         except AuthResponseErrorResponseError as e:
             return self._handle_error_response(
@@ -242,7 +258,7 @@ class OIDCAuthentication:
             result.userinfo_claims,
         )
 
-        destination = flask.session.pop("destination")
+        destination = flask.session.pop(self.destination_key)
         if is_processing_fragment_encoded_response:
             # if the POST request was from the JS page handling fragment encoded responses we need to return
             # the destination URL as the response body

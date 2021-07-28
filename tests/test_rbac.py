@@ -33,6 +33,7 @@ class TestOIDCAuthentication(object):
     CLIENT_ID = "client1"
     CLIENT_DOMAIN = "client.example.com"
     CALLBACK_RETURN_VALUE = "callback called successfully"
+    SESSION_KEY = "TEST"
 
     @pytest.fixture(autouse=True)
     def create_flask_app(self):
@@ -59,7 +60,7 @@ class TestOIDCAuthentication(object):
                 provider_metadata=provider_metadata, client_metadata=client_metadata, **kwargs
             )
         }
-        authn = OIDCAuthentication(provider_configurations)
+        authn = OIDCAuthentication(provider_configurations, session_key = self.SESSION_KEY)
         authn.init_app(self.app)
         return authn
 
@@ -159,9 +160,9 @@ class TestOIDCAuthentication(object):
         state = "test_state"
         with self.app.test_request_context("/redirect_uri?state={}&code=test".format(state)):
             UserSession(flask.session, self.PROVIDER_NAME)
-            flask.session["destination"] = "/"
-            flask.session["state"] = state
-            flask.session["nonce"] = nonce
+            flask.session[self.SESSION_KEY + "_destination"] = "/"
+            flask.session[self.SESSION_KEY + "_state"] = state
+            flask.session[self.SESSION_KEY + "_nonce"] = nonce
             authn._handle_authentication_response()
 
             assert test_endpoint()
@@ -243,9 +244,9 @@ class TestOIDCAuthentication(object):
         state = "test_state"
         with self.app.test_request_context("/redirect_uri?state={}&code=test".format(state)):
             UserSession(flask.session, self.PROVIDER_NAME)
-            flask.session["destination"] = "/"
-            flask.session["state"] = state
-            flask.session["nonce"] = nonce
+            flask.session[self.SESSION_KEY + "_destination"] = "/"
+            flask.session[self.SESSION_KEY + "_state"] = state
+            flask.session[self.SESSION_KEY + "_nonce"] = nonce
             authn._handle_authentication_response()
 
             with pytest.raises(Unauthorized):
