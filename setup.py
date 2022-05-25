@@ -18,7 +18,7 @@ setup(
         'Flask',
         'requests',
         'importlib_resources',
-        'PyJWT==2.1.0'
+        'PyJWT==2.4.0'
     ],
     package_data={'flask_pyoidc': ['parse_fragment.html']},
     long_description=long_description,
